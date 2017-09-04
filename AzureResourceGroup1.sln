@@ -1,9 +1,9 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
-VisualStudioVersion = 15.0.26403.7
+VisualStudioVersion = 15.0.26730.12
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{151D2E53-A2C4-4D7D-83FE-D05416EBD58E}") = "AzureResourceGroup1", "AzureResourceGroup1\AzureResourceGroup1.deployproj", "{182E956D-21F6-487E-BBD7-3683D634C021}"
+Project("{151D2E53-A2C4-4D7D-83FE-D05416EBD58E}") = "AzureLevel3ARMTemplate", "AzureResourceGroup1\AzureLevel3ARMTemplate.deployproj", "{182E956D-21F6-487E-BBD7-3683D634C021}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -18,5 +18,8 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {1BA9F371-9392-4AA3-B97F-01C91295174A}
 	EndGlobalSection
 EndGlobal

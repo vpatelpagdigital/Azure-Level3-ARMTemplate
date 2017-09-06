@@ -1,0 +1,533 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "TenantName": {
+            "type": "string",
+            "minLength": 1
+        },
+        "TenantLevel": {
+            "type": "int",
+            "defaultValue": 1,
+            "minValue": 1,
+            "allowedValues": [
+                1,
+                2,
+                3
+            ]
+        },
+        "TenantAppServicePlanSku": {
+            "type": "string",
+            "defaultValue": "F1",
+            "allowedValues": [
+                "F1",
+                "D1",
+                "B1",
+                "B2",
+                "B3",
+                "S1",
+                "S2",
+                "S3",
+                "P1",
+                "P2",
+                "P3",
+                "P4"
+            ],
+            "metadata": {
+                "description": "Describes plan's pricing tier and capacity. Check details at https://azure.microsoft.com/en-us/pricing/details/app-service/"
+            }
+        },
+        "SAType": {
+            "type": "string",
+            "defaultValue": "Standard_RAGRS",
+            "allowedValues": [
+                "Standard_LRS",
+                "Standard_ZRS",
+                "Standard_GRS",
+                "Standard_RAGRS",
+                "Premium_LRS"
+            ]
+        }
+    },
+    "variables": {
+
+        "namingInFix": "[toLower(substring(concat(parameters('TenantName'),uniqueString(resourceGroup().id)),0,9))]",
+        "Tenant.AppServicePlan.Name": "[concat(parameters('TenantName'),'-',resourceGroup().location,'ASP')]",
+        "Tenant.RubinPlay.ServiceBus": "[concat(variables('namingInFix'),'servicebus',uniqueString(resourceGroup().id))]",
+        "Tenant.RubinPlay.ServiceBus.TopicsName1": "activities",
+        "Tenant.RubinPlay.ServiceBus.TopicsName1.SubscriptionName1": "activities_subscriber",
+        "Tenant.RubinPlay.ServiceBus.TopicsName2": "prepped_activities",
+        "Tenant.RubinPlay.ServiceBus.TopicsName2.SubscriptionName1": "PROFILE_QUESTIONS_PROCESSOR_subscriber",
+        "Tenant.RubinPlay.ServiceBus.TopicsName2.SubscriptionName2": "REWARD_PROCESSOR_subscriber",
+        "Tenant.RubinPlay.ServiceBus.DefaultSASKeyName": "RootManageSharedAccessKey",
+        "Tenant.RubinPlay.ServiceBus.DefaultAuthRuleResourceId": "[resourceId('Microsoft.ServiceBus/namespaces/authorizationRules', variables('Tenant.RubinPlay.ServiceBus'), variables('Tenant.RubinPlay.ServiceBus.DefaultSASKeyName'))]",
+        "Tenant.RubinPlayProcessorWebJobHost.Storage": "[concat(variables('namingInFix'),'rppwjh','sa')]",
+        "Tenant.RubinPlayActivityWebJobHost.Storage": "[concat(variables('namingInFix'),'rpawjh','sa')]",
+        "Tenant.RubinPlayProcessorWebJobHost.Storage.AccountResourceId": "[resourceId('Microsoft.Storage/storageAccounts', variables('Tenant.RubinPlayProcessorWebJobHost.Storage'))]",
+        "Tenant.RubinPlayActivityWebJobHost.Storage.AccountResourceId": "[resourceId('Microsoft.Storage/storageAccounts', variables('Tenant.RubinPlayActivityWebJobHost.Storage'))]",
+        "Tenant.RubinPlayUI.ApplicationInsight": "[concat(variables('namingInFix'),'-','rubinplay-',resourceGroup().location,'ASP')]",
+        "Tenant.RubinPlayApi.ApplicationInsight": "[concat(variables('namingInFix'),'-','rubinplay-api-',resourceGroup().location,'ASP')]",
+        "Tenant.RubinPlayProcessorWebJobHost.ApplicationInsight": "[concat(variables('namingInFix'),'-','rppwjh-',resourceGroup().location,'ASP')]",
+        "Tenant.RubinPlayActivityWebJobHost.ApplicationInsight": "[concat(variables('namingInFix'),'-','rpawjh-',resourceGroup().location,'ASP')]",
+        "Tenant.RubinPlayUI.Web": "[concat(variables('namingInFix'),'-','rubinplay-',resourceGroup().location,'ASP')]",
+        "Tenant.RubinPlayApi.ApiApp": "[concat(variables('namingInFix'),'-','rubinplay-api-',resourceGroup().location,'ASP')]",
+        "Tenant.RubinPlayProcessorWebJobHost.Web": "[concat(variables('namingInFix'),'-','rppwjh-',resourceGroup().location,'ASP')]",
+        "Tenant.RubinPlayActivityWebJobHost.Web": "[concat(variables('namingInFix'),'-','rpawjh-',resourceGroup().location,'ASP')]"
+
+    },
+    "resources": [
+
+        {
+            "name": "[variables('Tenant.AppServicePlan.Name')]",
+            "type": "Microsoft.Web/serverfarms",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2015-08-01",
+            "sku": {
+                "name": "[parameters('TenantAppServicePlanSku')]"
+            },
+            "dependsOn": [],
+            "tags": {
+                "TenantName": "[parameters('TenantName')]",
+                "TenantLevel": "[parameters('TenantName')]"
+
+            },
+            "properties": {
+                "name": "[variables('Tenant.AppServicePlan.Name')]",
+                "numberOfWorkers": 1
+            }
+        },
+        {
+            "name": "[variables('Tenant.RubinPlayProcessorWebJobHost.Storage')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2016-01-01",
+            "sku": {
+                "name": "[parameters('SAType')]"
+            },
+            "dependsOn": [],
+            "tags": {
+                "displayName": "Storage for Processor Web Job Host",
+                "TenantName": "[parameters('TenantName')]"
+            },
+            "kind": "Storage"
+        },
+        {
+            "name": "[variables('Tenant.RubinPlayActivityWebJobHost.Storage')]",
+            "type": "Microsoft.Storage/storageAccounts",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2016-01-01",
+            "sku": {
+                "name": "[parameters('SAType')]"
+            },
+            "dependsOn": [],
+            "tags": {
+                "displayName": "Storage for Activity Web Job Host",
+                "TenantName": "[parameters('TenantName')]"
+            },
+            "kind": "Storage"
+        },
+        {
+            "apiVersion": "2017-04-01",
+            "name": "[variables('Tenant.RubinPlay.ServiceBus')]",
+            "type": "Microsoft.ServiceBus/namespaces",
+            "location": "[resourceGroup().location]",
+            "sku": {
+                "name": "Standard"
+            },
+            "tags": {
+                "TenantName": "[parameters('TenantName')]"
+            },
+            "properties": {
+            },
+            "resources": [
+                {
+                    "apiVersion": "2017-04-01",
+                    "name": "[variables('Tenant.RubinPlay.ServiceBus.TopicsName1')]",
+                    "type": "Topics",
+                    "dependsOn": [
+                        "[concat('Microsoft.ServiceBus/namespaces/', variables('Tenant.RubinPlay.ServiceBus'))]"
+                    ],
+                    "properties": {
+                        "path": "[variables('Tenant.RubinPlay.ServiceBus.TopicsName1')]"
+                    },
+                    "resources": [
+                        {
+                            "apiVersion": "2017-04-01",
+                            "name": "[variables('Tenant.RubinPlay.ServiceBus.TopicsName1.SubscriptionName1')]",
+                            "type": "Subscriptions",
+                            "dependsOn": [
+                                "[variables('Tenant.RubinPlay.ServiceBus.TopicsName1')]"
+                            ],
+                            "properties": {
+                            },
+                            "resources": [
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "apiVersion": "2017-04-01",
+                    "name": "[variables('Tenant.RubinPlay.ServiceBus.TopicsName2')]",
+                    "type": "Topics",
+                    "dependsOn": [
+                        "[concat('Microsoft.ServiceBus/namespaces/', variables('Tenant.RubinPlay.ServiceBus'))]"
+                    ],
+                    "properties": {
+                        "path": "[variables('Tenant.RubinPlay.ServiceBus.TopicsName2')]"
+                    },
+                    "resources": [
+                        {
+                            "apiVersion": "2017-04-01",
+                            "name": "[variables('Tenant.RubinPlay.ServiceBus.TopicsName2.SubscriptionName1')]",
+                            "type": "Subscriptions",
+                            "dependsOn": [
+                                "[variables('Tenant.RubinPlay.ServiceBus.TopicsName2')]"
+                            ],
+                            "properties": {
+                            },
+                            "resources": [
+                            ]
+                        },
+                        {
+                            "apiVersion": "2017-04-01",
+                            "name": "[variables('Tenant.RubinPlay.ServiceBus.TopicsName2.SubscriptionName2')]",
+                            "type": "Subscriptions",
+                            "dependsOn": [
+                                "[variables('Tenant.RubinPlay.ServiceBus.TopicsName2')]"
+                            ],
+                            "properties": {
+                            },
+                            "resources": [
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        //{
+        //    "comments": "",
+        //    "type": "microsoft.insights/components",
+        //    "kind": "web",
+        //    "name": "[parameters('components_Bleachr_rubinplay_centralus_name')]",
+        //    "apiVersion": "2014-04-01",
+        //    "location": "eastus",
+        //    "tags": {},
+        //    "scale": null,
+        //    "properties": {
+        //        "ApplicationId": "[parameters('components_Bleachr_rubinplay_centralus_name')]"
+        //    },
+        //    "dependsOn": []
+        //},
+
+        //{
+        //    "comments": "Generalized from resource: '/subscriptions/6ebd5b65-e50a-48dd-8063-9279b8ddf232/resourceGroups/Rubin-Bleachr-CentralUS/providers/microsoft.insights/components/Bleachr-rubinplay-centralus'.",
+        //    "type": "microsoft.insights/components",
+        //    "kind": "web",
+        //    "name": "[parameters('components_Bleachr_rubinplay_centralus_name')]",
+        //    "apiVersion": "2014-04-01",
+        //    "location": "eastus",
+        //    "tags": {},
+        //    "scale": null,
+        //    "properties": {
+        //        "ApplicationId": "[parameters('components_Bleachr_rubinplay_centralus_name')]"
+        //    },
+        //    "dependsOn": []
+        //},
+
+        //{
+        //    "comments": "Generalized from resource: '/subscriptions/6ebd5b65-e50a-48dd-8063-9279b8ddf232/resourceGroups/Rubin-Bleachr-CentralUS/providers/microsoft.insights/components/Bleachr-rubinplay-centralus'.",
+        //    "type": "microsoft.insights/components",
+        //    "kind": "web",
+        //    "name": "[parameters('components_Bleachr_rubinplay_centralus_name')]",
+        //    "apiVersion": "2014-04-01",
+        //    "location": "eastus",
+        //    "tags": {},
+        //    "scale": null,
+        //    "properties": {
+        //        "ApplicationId": "[parameters('components_Bleachr_rubinplay_centralus_name')]"
+        //    },
+        //    "dependsOn": []
+        //},
+
+        //{
+        //    "comments": "Generalized from resource: '/subscriptions/6ebd5b65-e50a-48dd-8063-9279b8ddf232/resourceGroups/Rubin-Bleachr-CentralUS/providers/microsoft.insights/components/Bleachr-rubinplay-centralus'.",
+        //    "type": "microsoft.insights/components",
+        //    "kind": "web",
+        //    "name": "[parameters('components_Bleachr_rubinplay_centralus_name')]",
+        //    "apiVersion": "2014-04-01",
+        //    "location": "eastus",
+        //    "tags": {},
+        //    "scale": null,
+        //    "properties": {
+        //        "ApplicationId": "[parameters('components_Bleachr_rubinplay_centralus_name')]"
+        //    },
+        //    "dependsOn": []
+        //},
+        //{
+        //    "comments": "",
+        //    "type": "Microsoft.Web/sites",
+        //    "kind": "app",
+        //    "name": "[parameters('sites_Bleachr_rpawjh_centralus_name')]",
+        //    "apiVersion": "2016-08-01",
+        //    "location": "Central US",
+        //    "tags": {
+        //        "hidden-related:/subscriptions/6ebd5b65-e50a-48dd-8063-9279b8ddf232/resourcegroups/Rubin-Bleachr-CentralUS/providers/Microsoft.Web/serverfarms/Bleachr-CentralUSASP": "empty"
+        //    },
+        //    "scale": null,
+        //    "properties": {
+        //        "enabled": true,
+        //        "hostNameSslStates": [
+        //            {
+        //                "name": "[concat(parameters('sites_Bleachr_rpawjh_centralus_name'),'bleachr-rpawjh-centralus.azurewebsites.net')]",
+        //                "sslState": "Disabled",
+        //                "virtualIP": null,
+        //                "thumbprint": null,
+        //                "toUpdate": null,
+        //                "hostType": "Standard"
+        //            },
+        //            {
+        //                "name": "[concat(parameters('sites_Bleachr_rpawjh_centralus_name'),'bleachr-rpawjh-centralus.scm.azurewebsites.net')]",
+        //                "sslState": "Disabled",
+        //                "virtualIP": null,
+        //                "thumbprint": null,
+        //                "toUpdate": null,
+        //                "hostType": "Repository"
+        //            }
+        //        ],
+        //        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('serverfarms_Bleachr_CentralUSASP_name'))]",
+        //        "reserved": false,
+        //        "siteConfig": null,
+        //        "scmSiteAlsoStopped": false,
+        //        "hostingEnvironmentProfile": null,
+        //        "clientAffinityEnabled": true,
+        //        "clientCertEnabled": false,
+        //        "hostNamesDisabled": false,
+        //        "containerSize": 0,
+        //        "dailyMemoryTimeQuota": 0,
+        //        "cloningInfo": null
+        //    },
+        //    "dependsOn": [
+        //        "[resourceId('Microsoft.Web/serverfarms', parameters('serverfarms_Bleachr_CentralUSASP_name'))]"
+        //    ]
+        //},
+        //{
+        //    "comments": "Generalized from resource: '/subscriptions/6ebd5b65-e50a-48dd-8063-9279b8ddf232/resourceGroups/Rubin-Bleachr-CentralUS/providers/Microsoft.Web/sites/Bleachr-rubinplay-api-centralus'.",
+        //    "type": "Microsoft.Web/sites",
+        //    "kind": "api",
+        //    "name": "[parameters('sites_Bleachr_rubinplay_api_centralus_name')]",
+        //    "apiVersion": "2016-08-01",
+        //    "location": "Central US",
+        //    "tags": {
+        //        "hidden-related:/subscriptions/6ebd5b65-e50a-48dd-8063-9279b8ddf232/resourcegroups/Rubin-Bleachr-CentralUS/providers/Microsoft.Web/serverfarms/Bleachr-CentralUSASP": "empty"
+        //    },
+        //    "scale": null,
+        //    "properties": {
+        //        "enabled": true,
+        //        "hostNameSslStates": [
+        //            {
+        //                "name": "[concat(parameters('sites_Bleachr_rubinplay_api_centralus_name'),'bleachr-rubinplay-api-centralus.azurewebsites.net')]",
+        //                "sslState": "Disabled",
+        //                "virtualIP": null,
+        //                "thumbprint": null,
+        //                "toUpdate": null,
+        //                "hostType": "Standard"
+        //            },
+        //            {
+        //                "name": "[concat(parameters('sites_Bleachr_rubinplay_api_centralus_name'),'bleachr-rubinplay-api-centralus.scm.azurewebsites.net')]",
+        //                "sslState": "Disabled",
+        //                "virtualIP": null,
+        //                "thumbprint": null,
+        //                "toUpdate": null,
+        //                "hostType": "Repository"
+        //            }
+        //        ],
+        //        "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', parameters('serverfarms_Bleachr_CentralUSASP_name'))]",
+        //        "reserved": false,
+        //        "siteConfig": null,
+        //        "scmSiteAlsoStopped": false,
+        //        "hostingEnvironmentProfile": null,
+        //        "clientAffinityEnabled": false,
+        //        "clientCertEnabled": false,
+        //        "hostNamesDisabled": false,
+        //        "containerSize": 0,
+        //        "dailyMemoryTimeQuota": 0,
+        //        "cloningInfo": null
+        //    },
+        //    "dependsOn": [
+        //        "[resourceId('Microsoft.Web/serverfarms', parameters('serverfarms_Bleachr_CentralUSASP_name'))]"
+        //    ]
+        //},
+
+        {
+            "name": "[variables('Tenant.RubinPlayUI.Web')]",
+            "type": "Microsoft.Web/sites",
+            "kind": "app",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2016-08-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('Tenant.AppServicePlan.Name'))]"
+            ],
+            "tags": {
+                "[concat('hidden-related:', resourceId('Microsoft.Web/serverfarms',variables('Tenant.AppServicePlan.Name')))]": "Resource",
+                "displayName": "[variables('Tenant.RubinPlayUI.Web')]",
+                "TenantName": "[parameters('TenantName')]"
+
+            },
+            "properties": {
+                "name": "[variables('Tenant.RubinPlayUI.Web')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('Tenant.AppServicePlan.Name'))]"
+            }
+        },
+        {
+            "name": "[variables('Tenant.RubinPlayApi.ApiApp')]",
+            "type": "Microsoft.Web/sites",
+            "kind": "api",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2016-08-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('Tenant.AppServicePlan.Name'))]"
+            ],
+            "tags": {
+                "[concat('hidden-related:', resourceId('Microsoft.Web/serverfarms',variables('Tenant.AppServicePlan.Name')))]": "Resource",
+                "displayName": "[variables('Tenant.RubinPlayApi.ApiApp')]",
+                "TenantName": "[parameters('TenantName')]"
+            },
+            "properties": {
+                "name": "[variables('Tenant.RubinPlayApi.ApiApp')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('Tenant.AppServicePlan.Name'))]"
+            }
+        },
+        {
+            "name": "[variables('Tenant.RubinPlayProcessorWebJobHost.Web')]",
+            "type": "Microsoft.Web/sites",
+            "kind": "app",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2016-08-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('Tenant.AppServicePlan.Name'))]"
+            ],
+            "tags": {
+                "[concat('hidden-related:', resourceId('Microsoft.Web/serverfarms',variables('Tenant.AppServicePlan.Name')))]": "Resource",
+                "displayName": "[variables('Tenant.RubinPlayProcessorWebJobHost.Web')]",
+                "TenantName": "[parameters('TenantName')]"
+            },
+            "properties": {
+                "name": "[variables('Tenant.RubinPlayProcessorWebJobHost.Web')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('Tenant.AppServicePlan.Name'))]"
+            }
+        },
+        {
+            "name": "[variables('Tenant.RubinPlayActivityWebJobHost.Web')]",
+            "type": "Microsoft.Web/sites",
+            "kind": "app",
+            "location": "[resourceGroup().location]",
+            "apiVersion": "2016-08-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/serverfarms', variables('Tenant.AppServicePlan.Name'))]"
+            ],
+            "tags": {
+                "[concat('hidden-related:', resourceId('Microsoft.Web/serverfarms',variables('Tenant.AppServicePlan.Name')))]": "Resource",
+                "displayName": "[variables('Tenant.RubinPlayActivityWebJobHost.Web')]",
+                "TenantName": "[parameters('TenantName')]"
+            },
+            "properties": {
+                "name": "[variables('Tenant.RubinPlayActivityWebJobHost.Web')]",
+                "serverFarmId": "[resourceId('Microsoft.Web/serverfarms', variables('Tenant.AppServicePlan.Name'))]"
+            }
+        },
+        {
+            "name": "[variables('Tenant.RubinPlayUI.ApplicationInsight')]",
+            "type": "Microsoft.Insights/components",
+            "location": "East US",
+            "apiVersion": "2014-04-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('Tenant.RubinPlayUI.Web'))]"
+            ],
+            "tags": {
+                "displayName": "[concat('Component ', variables('Tenant.RubinPlayUI.ApplicationInsight'))]",
+                "[concat('hidden-link:', resourceId('Microsoft.Web/sites',variables('Tenant.RubinPlayUI.Web')))]": "Resource",
+                "TenantName": "[parameters('TenantName')]"
+            },
+            "properties": {
+                "applicationId": "[resourceId('Microsoft.Web/sites', variables('Tenant.RubinPlayUI.Web'))]"
+            }
+        },
+        {
+            "name": "[variables('Tenant.RubinPlayApi.ApplicationInsight')]",
+            "type": "Microsoft.Insights/components",
+            "location": "East US",
+            "apiVersion": "2014-04-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('Tenant.RubinPlayApi.ApiApp'))]"
+            ],
+            "tags": {
+                "displayName": "[concat('Component ', variables('Tenant.RubinPlayApi.ApplicationInsight'))]",
+                "[concat('hidden-link:', resourceId('Microsoft.Web/sites',variables('Tenant.RubinPlayApi.ApiApp')))]": "Resource",
+                "TenantName": "[parameters('TenantName')]"
+            },
+            "properties": {
+                "applicationId": "[resourceId('Microsoft.Web/sites', variables('Tenant.RubinPlayApi.ApiApp'))]"
+            }
+        },
+        {
+            "name": "[variables('Tenant.RubinPlayProcessorWebJobHost.ApplicationInsight')]",
+            "type": "Microsoft.Insights/components",
+            "location": "East US",
+            "apiVersion": "2014-04-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('Tenant.RubinPlayProcessorWebJobHost.Web'))]"
+            ],
+            "tags": {
+                "displayName": "[concat('Component ', variables('Tenant.RubinPlayProcessorWebJobHost.ApplicationInsight'))]",
+                "[concat('hidden-link:', resourceId('Microsoft.Web/sites',variables('Tenant.RubinPlayProcessorWebJobHost.ApplicationInsight')))]": "Resource",
+                "TenantName": "[parameters('TenantName')]"
+            },
+            "properties": {
+                "applicationId": "[resourceId('Microsoft.Web/sites', variables('Tenant.RubinPlayProcessorWebJobHost.Web'))]"
+            }
+        },
+        {
+            "name": "[variables('Tenant.RubinPlayActivityWebJobHost.ApplicationInsight')]",
+            "type": "Microsoft.Insights/components",
+            "location": "East US",
+            "apiVersion": "2014-04-01",
+            "dependsOn": [
+                "[resourceId('Microsoft.Web/sites', variables('Tenant.RubinPlayActivityWebJobHost.Web'))]"
+            ],
+            "tags": {
+                "displayName": "[concat('Component ', variables('Tenant.RubinPlayActivityWebJobHost.ApplicationInsight'))]",
+                "[concat('hidden-link:', resourceId('Microsoft.Web/sites',variables('Tenant.RubinPlayActivityWebJobHost.Web')))]": "Resource",
+                "TenantName": "[parameters('TenantName')]"
+            },
+            "properties": {
+                "applicationId": "[resourceId('Microsoft.Web/sites', variables('Tenant.RubinPlayActivityWebJobHost.Web'))]"
+            }
+        }
+    ],
+    "outputs": {
+        "ProcessorWebJobHost": {
+            "type": "object",
+            "value": {
+                "resourceId": "[variables('Tenant.RubinPlayProcessorWebJobHost.Storage.AccountResourceId')]",
+                "accountName": "[variables('Tenant.RubinPlayProcessorWebJobHost.Storage')]",
+                "primaryKey": "[listKeys(variables('Tenant.RubinPlayProcessorWebJobHost.Storage.AccountResourceId'), '2016-01-01')]"
+            }
+        },
+        "ActivityWebJobHost": {
+            "type": "object",
+            "value": {
+                "resourceId": "[variables('Tenant.RubinPlayActivityWebJobHost.Storage.AccountResourceId')]",
+                "accountName": "[variables('Tenant.RubinPlayActivityWebJobHost.Storage')]",
+                "primaryKey": "[listKeys(variables('Tenant.RubinPlayActivityWebJobHost.Storage.AccountResourceId'), '2016-01-01')]"
+            }
+        },
+        "NamespaceDefaultConnectionString": {
+            "type": "string",
+            "value": "[listkeys(variables('Tenant.RubinPlay.ServiceBus.DefaultAuthRuleResourceId'), '2017-04-01').primaryConnectionString]"
+        },
+        "DefaultSharedAccessPolicyPrimaryKey": {
+            "type": "string",
+            "value": "[listkeys(variables('Tenant.RubinPlay.ServiceBus.DefaultAuthRuleResourceId'), '2017-04-01').primaryKey]"
+        }
+    }
+}
